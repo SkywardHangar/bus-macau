@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="bw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>巴士路线图详细资料</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        :root { --font-size: 16px; }
+        body { font-size: var(--font-size); }
+
+        /* 全局顶部提示 */
+        .toast-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+            padding: 16px;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: toastSlideIn 0.3s ease-out;
+            pointer-events: auto;
+            max-width: 90%;
+            text-align: center;
+        }
+        .toast.toast-error { background: #dc2626; }
+        .toast.toast-warning { background: #f59e0b; }
+        .toast.toast-success { background: #16a34a; }
+        .toast.toast-info { background: #3b82f6; }
+        .toast.toast-hide {
+            animation: toastSlideOut 0.3s ease-in forwards;
+        }
+        @keyframes toastSlideIn {
+            from { opacity: 0; transform: translateY(-100%); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastSlideOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-100%); }
+        }
+
+        /* ===== 黑白主题 ===== */
+        [data-theme="bw"] { --login-bg: linear-gradient(135deg, #374151, #111827); --primary: #111827; --primary-hover: #000000; --primary-light: #f3f4f6; --primary-text: white; --accent: #374151; --accent-hover: #1f2937; --sidebar-active-bg: #e5e7eb; --sidebar-active-border: #374151; --admin-header-bg: #111827; --admin-header-text: white; --admin-exit-bg: white; --admin-exit-text: #111827; --btn-danger: #374151; --btn-danger-hover: #111827; --btn-success: #374151; --btn-success-hover: #111827; --focus-ring: rgba(55,65,81,0.5); --badge-bg: rgba(0,0,0,0.6); }
+        /* ===== 蓝色主题 ===== */
+        [data-theme="blue"] { --login-bg: linear-gradient(135deg, #3b82f6, #7c3aed); --primary: #2563eb; --primary-hover: #1d4ed8; --primary-light: #dbeafe; --primary-text: white; --accent: #2563eb; --accent-hover: #1d4ed8; --sidebar-active-bg: #dbeafe; --sidebar-active-border: #3b82f6; --admin-header-bg: #2563eb; --admin-header-text: white; --admin-exit-bg: white; --admin-exit-text: #2563eb; --btn-danger: #dc2626; --btn-danger-hover: #b91c1c; --btn-success: #16a34a; --btn-success-hover: #15803d; --focus-ring: rgba(59,130,246,0.5); --badge-bg: rgba(0,0,0,0.5); }
+
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; padding: 16px; }
+        .modal-overlay.active { display: flex; }
+        .modal-overlay.scroll-modal { overflow-y: auto; align-items: flex-start; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .route-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+        .route-card { transition: all 0.3s ease; }
+        .sidebar-item:hover { background: #e5e7eb; }
+        .sidebar-item.active { background: var(--sidebar-active-bg); border-left: 4px solid var(--sidebar-active-border); }
+
+        .btn-primary { background: var(--primary); color: var(--primary-text); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-danger { background: var(--btn-danger); color: white; }
+        .btn-danger:hover { background: var(--btn-danger-hover); }
+        .btn-success { background: var(--btn-success); color: white; }
+        .btn-success:hover { background: var(--btn-success-hover); }
+        .text-link { color: var(--primary); }
+        .text-link:hover { text-decoration: underline; }
+        .focus-ring:focus { box-shadow: 0 0 0 3px var(--focus-ring); outline: none; }
+
+        .login-bg { background: var(--login-bg); }
+        .admin-header { background: var(--admin-header-bg); color: var(--admin-header-text); }
+        .admin-exit-btn { background: var(--admin-exit-bg); color: var(--admin-exit-text); }
+
+        .theme-preview { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; display: inline-block; }
+        .theme-preview.active { border-color: #111827; }
+        .theme-preview-bw { background: linear-gradient(135deg, #374151, #111827); }
+        .theme-preview-blue { background: linear-gradient(135deg, #3b82f6, #7c3aed); }
+
+        .mobile-bottom-nav {
+            display: none; position: fixed; bottom: 0; left: 0; right: 0;
+            background: white; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 50; padding: 8px 0; padding-bottom: max(8px, env(safe-area-inset-bottom));
+        }
+
+        @media (max-width: 768px) {
+            .desktop-header-buttons { display: none !important; }
+            .mobile-bottom-nav { display: flex; }
+            #mainPage main { padding-bottom: 80px; }
+            #mainPage #mainFooter { padding-bottom: 70px; }
+            .main-sidebar { display: none; }
+            .main-content-area { width: 100% !important; }
+            .mobile-category-select { display: block !important; }
+        }
+        @media (min-width: 769px) {
+            .mobile-category-select { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- 全局顶部提示容器 -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- 登录页面 -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center login-bg px-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm fade-in">
+            <div class="text-center mb-6">
+                <img id="loginIcon" src="https://cdn-icons-png.flaticon.com/512/3448/3448339.png" class="w-20 h-20 mx-auto mb-4" alt="Logo">
+                <h1 id="loginTitle" class="text-2xl font-bold text-gray-800">巴士路线图资讯</h1>
+            </div>
+            <div id="loginError" class="hidden bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm"></div>
+            <div id="loginWarning" class="hidden bg-yellow-100 text-yellow-700 p-3 rounded-lg mb-4 text-sm"></div>
+            <div id="loginInfo" class="hidden bg-blue-100 text-blue-700 p-3 rounded-lg mb-4 text-sm"></div>
+            <input type="text" id="username" placeholder="用户名" class="w-full p-3 border rounded-lg mb-4 focus-ring">
+            <div class="relative mb-4">
+                <input type="password" id="password" placeholder="密码" class="w-full p-3 border rounded-lg focus-ring pr-12">
+                <button type="button" id="btnTogglePassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                    <svg id="iconEyeOff" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                    <svg id="iconEye" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                </button>
+            </div>
+            <button id="btnLogin" class="w-full btn-primary p-3 rounded-lg transition font-semibold" data-i18n="login">登录</button>
+            <button id="btnRegister" class="w-full mt-3 p-3 rounded-lg transition font-semibold border-2 border-gray-300 hover:bg-gray-100" data-i18n="register">注册</button>
+            <button id="btnGuest" class="w-full mt-3 p-3 rounded-lg transition font-semibold text-gray-500 hover:bg-gray-50" data-i18n="guestLogin">访客进入</button>
+            <div class="mt-6 pt-4 border-t">
+                <label class="block text-sm text-gray-500 mb-2 text-center" data-i18n="language">语言</label>
+                <select id="loginLanguageSelect" class="w-full p-2 border rounded-lg text-sm"></select>
+            </div>
+            <p id="loginCopyright" class="mt-4 text-center text-xs text-gray-400"></p>
+        </div>
+    </div>
+
+    <!-- 主页面 -->
+    <div id="mainPage" class="hidden min-h-screen flex flex-col">
+        <header class="bg-white shadow-md sticky top-0 z-40">
+            <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+                <h1 id="mainTitle" class="text-xl md:text-2xl font-bold text-gray-800 truncate">巴士路线图详细资料</h1>
+                <div class="desktop-header-buttons flex items-center gap-3">
+                    <button id="btnDesktopSettings" class="p-2 hover:bg-gray-100 rounded-lg" title="设置">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                    <button id="btnDesktopSearch" class="p-2 hover:bg-gray-100 rounded-lg" title="搜索">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </button>
+                    <button id="btnDesktopLogout" class="btn-danger px-4 py-2 rounded-lg text-sm" data-i18n="logout">退出</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-4 py-4 md:py-8 flex-1">
+            <div class="mobile-category-select mb-4 space-y-2">
+                <select id="mobileCategoryFilter" class="w-full p-3 border rounded-lg bg-white"><option value="">所有分类</option></select>
+                <select id="mobileFolderFilter" class="w-full p-3 border rounded-lg bg-white"><option value="">所有资料夹</option></select>
+            </div>
+            <div class="flex gap-6">
+                <div class="main-sidebar w-64 bg-white rounded-xl shadow-md p-4 h-fit sticky top-24 shrink-0">
+                    <h3 class="font-bold text-gray-700 mb-4" data-i18n="categories">分类</h3>
+                    <div id="categoryList" class="space-y-1"></div>
+                </div>
+                <div class="main-content-area flex-1 min-w-0">
+                    <div class="hidden md:flex justify-end mb-4">
+                        <select id="desktopFolderFilter" class="p-2 border rounded-lg bg-white min-w-[200px]"><option value="">所有资料夹</option></select>
+                    </div>
+                    <div id="routeList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer id="mainFooter" class="bg-white border-t mt-8 py-4">
+            <p id="mainCopyright" class="text-center text-sm text-gray-500"></p>
+        </footer>
+
+        <div class="mobile-bottom-nav">
+            <button id="btnMobileCategory" class="flex-1 flex flex-col items-center gap-1 text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                <span class="text-xs" data-i18n="categories">分类</span>
+            </button>
+            <button id="btnMobileSearch" class="flex-1 flex flex-col items-center gap-1 text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <span class="text-xs" data-i18n="search">搜索</span>
+            </button>
+            <button id="btnMobileSettings" class="flex-1 flex flex-col items-center gap-1 text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span class="text-xs" data-i18n="settings">设置</span>
+            </button>
+            <button id="btnMobileLogout" class="flex-1 flex flex-col items-center gap-1 text-gray-500">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                <span class="text-xs" data-i18n="logout">退出</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="settings">设置</h2>
+                <button id="btnCloseSettings" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="colorTheme">颜色主题</label>
+                    <div class="flex gap-4 items-center">
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" id="themeBW">
+                            <div class="theme-preview theme-preview-bw active" data-theme-val="bw"></div>
+                            <span class="text-xs" data-i18n="themeBW">黑白</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-1 cursor-pointer" id="themeBlue">
+                            <div class="theme-preview theme-preview-blue" data-theme-val="blue"></div>
+                            <span class="text-xs" data-i18n="themeBlue">蓝色</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="language">语言</label>
+                    <select id="languageSelect" class="w-full p-2 border rounded-lg"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><span data-i18n="fontSize">字体大小</span>: <span id="fontSizeValue">16</span>px</label>
+                    <input type="range" id="fontSizeSlider" min="12" max="24" value="16" class="w-full">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="region">地区</label>
+                    <select id="regionSelect" class="w-full p-2 border rounded-lg">
+                        <option value="CN">中国</option>
+                        <option value="HK">中国香港</option>
+                        <option value="MO">中国澳门</option>
+                        <option value="TW">中国台湾</option>
+                        <option value="JP">日本</option>
+                        <option value="KR">韩国</option>
+                        <option value="US">美国</option>
+                    </select>
+                </div>
+                <div id="updateDateDisplay" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="updateDate">更新日期</label>
+                    <p id="updateDateText" class="text-gray-600 bg-gray-50 p-2 rounded"></p>
+                </div>
+            </div>
+            <div id="settingsCopyright" class="mt-6 pt-4 border-t text-center text-sm text-gray-500"></div>
+        </div>
+    </div>
+
+    <!-- 搜索弹窗 -->
+    <div id="searchModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="searchRoute">搜索路线</h2>
+                <button id="btnCloseSearch" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="text" id="searchInput" placeholder="输入搜索内容..." class="w-full p-3 border rounded-lg focus-ring">
+            <div id="searchResults" class="mt-4 max-h-60 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- 密码验证弹窗 -->
+    <div id="secretModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-xs fade-in">
+            <h2 class="text-lg font-bold mb-4" data-i18n="enterSecret">请输入验证码</h2>
+            <input type="password" id="secretCode" placeholder="验证码" class="w-full p-3 border rounded-lg mb-4 focus-ring">
+            <button id="btnVerifySecret" class="w-full btn-primary p-2 rounded-lg" data-i18n="confirm">确认</button>
+        </div>
+    </div>
+
+    <!-- 路线详情弹窗 -->
+    <div id="routeDetailModal" class="modal-overlay scroll-modal">
+        <div class="bg-white rounded-2xl p-4 md:p-6 w-full max-w-4xl fade-in my-8">
+            <div class="flex justify-between items-center mb-4 md:mb-6">
+                <h2 id="routeDetailTitle" class="text-xl md:text-2xl font-bold"></h2>
+                <button id="btnCloseRouteDetail" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-2 border-b pb-2" data-i18n="routeIntro">路线简介</h3>
+                <p id="routeDetailIntro" class="text-gray-700 whitespace-pre-wrap leading-relaxed"></p>
+            </div>
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-2 border-b pb-2" data-i18n="allocatedBuses">挂牌车</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[400px] text-sm md:text-base">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-2 text-left" data-i18n="busNumber">编号</th>
+                                <th class="p-2 text-left" data-i18n="busPlate">车牌</th>
+                                <th class="p-2 text-left" data-i18n="busModel">车型</th>
+                                <th class="p-2 text-left" data-i18n="busAge">车龄</th>
+                            </tr>
+                        </thead>
+                        <tbody id="routeDetailBuses"></tbody>
+                    </table>
+                </div>
+            </div>
+            <h3 class="font-bold text-lg mb-2 border-b pb-2" data-i18n="images">图片</h3>
+            <div id="routeDetailImages" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4"></div>
+        </div>
+    </div>
+
+    <!-- 后台管理页面 -->
+    <div id="adminPage" class="hidden min-h-screen bg-gray-100">
+        <header class="admin-header shadow-md">
+            <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+                <h1 class="text-lg md:text-xl font-bold" data-i18n="adminSystem">后台管理系统</h1>
+                <button id="btnExitAdmin" class="admin-exit-btn px-3 md:px-4 py-2 rounded-lg hover:opacity-90 text-sm font-semibold" data-i18n="backToFront">返回前台</button>
+            </div>
+        </header>
+        <div class="flex flex-col md:flex-row">
+            <div class="w-full md:w-64 bg-white shadow-md">
+                <nav class="p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible">
+                    <button class="sidebar-item admin-sidebar-btn active whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="routes" data-i18n="routeManagement">路线管理</button>
+                    <button class="sidebar-item admin-sidebar-btn whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="categories" data-i18n="categoryManagement">分类与资料夹</button>
+                    <button class="sidebar-item admin-sidebar-btn whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="accounts" data-i18n="accountManagement">账户管理</button>
+                    <button class="sidebar-item admin-sidebar-btn whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="languages" data-i18n="languageManagement">语言管理</button>
+                    <button class="sidebar-item admin-sidebar-btn whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="customize" data-i18n="customizeSettings">自定义设置</button>
+                    <button class="sidebar-item admin-sidebar-btn whitespace-nowrap md:w-full text-left p-3 rounded-lg" data-tab="export" data-i18n="exportHtml">导出HTML</button>
+                </nav>
+            </div>
+            <div class="flex-1 p-4 md:p-6">
+                <div id="tab-routes" class="admin-tab">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl md:text-2xl font-bold" data-i18n="routeManagement">路线管理</h2>
+                        <button id="btnOpenAddRoute" class="btn-primary px-4 py-2 rounded-lg w-full md:w-auto" data-i18n="addRoute">新增路线</button>
+                    </div>
+                    <div id="adminRouteList" class="bg-white rounded-xl shadow-md overflow-x-auto"></div>
+                </div>
+                <div id="tab-categories" class="admin-tab hidden">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl md:text-2xl font-bold" data-i18n="categoryManagement">分类与资料夹管理</h2>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <button id="btnOpenAddCategory" class="flex-1 md:flex-none btn-primary px-4 py-2 rounded-lg" data-i18n="addCategory">新增分类</button>
+                            <button id="btnOpenAddFolder" class="flex-1 md:flex-none btn-success px-4 py-2 rounded-lg" data-i18n="addFolder">新增资料夹</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl shadow-md p-4">
+                            <h3 class="font-bold mb-4" data-i18n="categoryList">分类列表</h3>
+                            <div id="adminCategoryList" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-md p-4">
+                            <h3 class="font-bold mb-4" data-i18n="folderList">资料夹列表</h3>
+                            <div id="adminFolderList" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="tab-accounts" class="admin-tab hidden">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl md:text-2xl font-bold" data-i18n="accountManagement">账户管理</h2>
+                        <button id="btnOpenAddAccount" class="btn-primary px-4 py-2 rounded-lg w-full md:w-auto" data-i18n="addAccount">新增账户</button>
+                    </div>
+                    <div id="adminAccountList" class="bg-white rounded-xl shadow-md overflow-x-auto"></div>
+                </div>
+                <div id="tab-languages" class="admin-tab hidden">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl md:text-2xl font-bold" data-i18n="languageManagement">语言管理</h2>
+                        <button id="btnOpenAddLanguage" class="btn-primary px-4 py-2 rounded-lg w-full md:w-auto" data-i18n="addLanguage">新增语言</button>
+                    </div>
+                    <div id="adminLanguageList" class="bg-white rounded-xl shadow-md overflow-x-auto"></div>
+                </div>
+                <div id="tab-customize" class="admin-tab hidden">
+                    <h2 class="text-xl md:text-2xl font-bold mb-6" data-i18n="customizeSettings">自定义设置</h2>
+                    <div class="bg-white rounded-xl shadow-md p-4 md:p-6 space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="siteTitle">网站标题（默认）</label>
+                            <input type="text" id="customTitle" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="loginPageTitle">登录页标题（默认）</label>
+                            <input type="text" id="customLoginTitle" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div id="multiLangTitlesSection" class="border-t pt-4">
+                            <h3 class="font-bold text-gray-700 mb-4" data-i18n="multiLangTitles">多语言标题设置</h3>
+                            <div id="multiLangTitlesList" class="space-y-4"></div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="loginIconUrl">登录页图标URL</label>
+                            <input type="text" id="customLoginIcon" class="w-full p-3 border rounded-lg">
+                            <img id="loginIconPreview" class="mt-2 w-16 h-16 object-contain hidden">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="updateDate">更新日期</label>
+                            <input type="date" id="customUpdateDate" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="copyrightText">版权提示</label>
+                            <input type="text" id="customCopyright" class="w-full p-3 border rounded-lg" placeholder="© 2024 版权所有">
+                        </div>
+                        <button id="btnSaveCustomization" class="btn-primary px-6 py-2 rounded-lg w-full md:w-auto" data-i18n="saveSettings">保存设置</button>
+                    </div>
+                </div>
+                <div id="tab-export" class="admin-tab hidden">
+                    <h2 class="text-xl md:text-2xl font-bold mb-6" data-i18n="exportHtml">导出独立HTML文件</h2>
+                    <div class="bg-white rounded-xl shadow-md p-4 md:p-6">
+                        <p class="text-gray-600 mb-4" data-i18n="exportDesc">点击下方按钮将导出一个包含所有数据的独立HTML文件，可以直接在浏览器中打开使用。</p>
+                        <button id="btnExportHTML" class="btn-success px-6 py-3 rounded-lg font-semibold w-full md:w-auto" data-i18n="exportFullHtml">导出完整HTML文件</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer class="bg-white border-t py-4 mt-auto">
+            <p id="adminCopyright" class="text-center text-sm text-gray-500"></p>
+        </footer>
+    </div>
+
+    <!-- 新增路线弹窗 -->
+    <div id="addRouteModal" class="modal-overlay scroll-modal">
+        <div class="bg-white rounded-2xl p-4 md:p-6 w-full max-w-2xl fade-in my-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="routeModalTitle" class="text-xl font-bold" data-i18n="addRoute">新增路线</h2>
+                <button id="btnCloseAddRoute" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="hidden" id="editRouteId">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="routeName">路线名称</label>
+                    <input type="text" id="routeName" class="w-full p-3 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="routeIntro">路线简介</label>
+                    <textarea id="routeIntro" rows="3" class="w-full p-3 border rounded-lg" placeholder="请输入路线简介..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="category">所属分类</label>
+                    <select id="routeCategory" class="w-full p-3 border rounded-lg"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="folder">所属资料夹</label>
+                    <select id="routeFolder" class="w-full p-3 border rounded-lg"></select>
+                </div>
+                <div class="border-t pt-4">
+                    <label class="flex items-center gap-2 cursor-pointer mb-3">
+                        <input type="checkbox" id="enableBusInfo" class="w-4 h-4">
+                        <span class="text-sm font-medium text-gray-700" data-i18n="enableBusInfo">添加挂牌车资讯</span>
+                    </label>
+                    <div id="busInputSection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="allocatedBuses">挂牌车</label>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+                            <input type="text" id="busNumber" placeholder="编号" class="p-2 border rounded">
+                            <input type="text" id="busPlate" placeholder="车牌" class="p-2 border rounded">
+                            <input type="text" id="busModel" placeholder="车型" class="p-2 border rounded">
+                            <input type="text" id="busAge" placeholder="车龄" class="p-2 border rounded">
+                            <button type="button" id="btnAddBus" class="btn-success rounded p-2 col-span-2 md:col-span-1" data-i18n="add">添加</button>
+                        </div>
+                        <div class="max-h-40 overflow-y-auto bg-gray-50 rounded p-2">
+                            <table class="w-full text-sm">
+                                <thead><tr class="text-left text-gray-500"><th>编号</th><th>车牌</th><th>车型</th><th>车龄</th><th></th></tr></thead>
+                                <tbody id="busPreviewList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t pt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="images">图片URL (最多25张)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="imageUrlInput" class="flex-1 p-3 border rounded-lg" placeholder="输入图片URL">
+                        <button type="button" id="btnAddImage" class="btn-primary px-4 rounded-lg" data-i18n="add">添加</button>
+                    </div>
+                    <p id="imageCount" class="text-sm text-gray-500 mt-1">已添加: 0/25</p>
+                </div>
+                <div id="imagePreviewList" class="grid grid-cols-3 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto"></div>
+                <button id="btnSaveRoute" class="w-full btn-primary p-3 rounded-lg font-semibold mt-4" data-i18n="saveRoute">保存路线</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增分类弹窗 -->
+    <div id="addCategoryModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="addCategory">新增分类</h2>
+                <button id="btnCloseAddCategory" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="hidden" id="editCategoryId">
+            <input type="text" id="categoryName" placeholder="分类名称" class="w-full p-3 border rounded-lg mb-4">
+            <button id="btnSaveCategory" class="w-full btn-primary p-3 rounded-lg" data-i18n="save">保存</button>
+        </div>
+    </div>
+
+    <!-- 新增资料夹弹窗 -->
+    <div id="addFolderModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="addFolder">新增资料夹</h2>
+                <button id="btnCloseAddFolder" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="hidden" id="editFolderId">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="folderName">资料夹名称</label>
+                    <input type="text" id="folderName" placeholder="资料夹名称" class="w-full p-3 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="parentCategory">所属分类</label>
+                    <select id="folderCategory" class="w-full p-3 border rounded-lg"></select>
+                </div>
+                <button id="btnSaveFolder" class="w-full btn-primary p-3 rounded-lg" data-i18n="save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增账户弹窗 -->
+    <div id="addAccountModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="accountModalTitle" class="text-xl font-bold" data-i18n="addAccount">新增账户</h2>
+                <button id="btnCloseAddAccount" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="hidden" id="editAccountId">
+            <div class="space-y-4">
+                <input type="text" id="accountUsername" placeholder="用户名" class="w-full p-3 border rounded-lg">
+                <input type="password" id="accountPassword" placeholder="密码" class="w-full p-3 border rounded-lg">
+                <select id="accountStatus" class="w-full p-3 border rounded-lg">
+                    <option value="approved">已通过</option>
+                    <option value="pending">需要审核</option>
+                    <option value="reviewed">已审核</option>
+                    <option value="violation">违反安全设置</option>
+                    <option value="banned">封号</option>
+                </select>
+                <button id="btnSaveAccount" class="w-full btn-primary p-3 rounded-lg" data-i18n="save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增语言弹窗 -->
+    <div id="addLanguageModal" class="modal-overlay">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="addLanguage">新增语言</h2>
+                <button id="btnCloseAddLanguage" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <input type="hidden" id="editLanguageId">
+            <div class="space-y-4">
+                <input type="text" id="languageCode" placeholder="语言代码 (如: en)" class="w-full p-3 border rounded-lg">
+                <input type="text" id="languageNameInput" placeholder="语言名称 (如: English)" class="w-full p-3 border rounded-lg">
+                <button id="btnSaveLanguage" class="w-full btn-primary p-3 rounded-lg" data-i18n="save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 翻译字典 ==========
+        var translations = {
+            'zh-CN': {
+                login:'登录',logout:'退出',settings:'设置',search:'搜索',categories:'分类',
+                allCategories:'所有分类',allFolders:'所有资料夹',searchRoute:'搜索路线',
+                enterSecret:'请输入验证码',confirm:'确认',routeIntro:'路线简介',
+                allocatedBuses:'挂牌车',busNumber:'编号',busPlate:'车牌',busModel:'车型',busAge:'车龄',
+                images:'图片',adminSystem:'后台管理系统',backToFront:'返回前台',
+                routeManagement:'路线管理',categoryManagement:'分类与资料夹',
+                accountManagement:'账户管理',languageManagement:'语言管理',
+                customizeSettings:'自定义设置',exportHtml:'导出HTML',
+                addRoute:'新增路线',addCategory:'新增分类',addFolder:'新增资料夹',
+                addAccount:'新增账户',addLanguage:'新增语言',
+                categoryList:'分类列表',folderList:'资料夹列表',
+                saveSettings:'保存设置',siteTitle:'网站标题',
+                loginPageTitle:'登录页标题',loginIconUrl:'登录页图标URL',
+                exportDesc:'点击下方按钮将导出一个包含所有数据的独立HTML文件，可以直接在浏览器中打开使用。',
+                exportFullHtml:'导出完整HTML文件',routeName:'路线名称',
+                category:'所属分类',folder:'所属资料夹',add:'添加',
+                saveRoute:'保存路线',save:'保存',folderName:'资料夹名称',
+                parentCategory:'所属分类',language:'语言',fontSize:'字体大小',
+                colorTheme:'颜色主题',themeBW:'黑白',themeBlue:'蓝色',
+                noRoutes:'暂无路线数据',noIntro:'暂无简介',noBuses:'暂无挂牌车信息',
+                editRoute:'编辑路线',edit:'编辑',delete:'删除',
+                imgCount:'张图片',busCount:'辆',enableBusInfo:'添加挂牌车资讯',
+                register:'注册',loading:'加载中...',registerError:'操作异常，暂时无法注册',
+                region:'地区',updateDate:'更新日期',copyrightText:'版权提示',
+                guestLogin:'访客进入',loginToViewBuses:'请登录后再查看',
+                multiLangTitles:'多语言标题设置'
+            },
+            'zh-TW': {
+                login:'登錄',logout:'登出',settings:'設置',search:'搜尋',categories:'分類',
+                allCategories:'所有分類',allFolders:'所有資料夾',searchRoute:'搜尋路線',
+                enterSecret:'請輸入驗證碼',confirm:'確認',routeIntro:'路線簡介',
+                allocatedBuses:'掛牌車',busNumber:'編號',busPlate:'車牌',busModel:'車型',busAge:'車齡',
+                images:'圖片',adminSystem:'後台管理系統',backToFront:'返回前台',
+                routeManagement:'路線管理',categoryManagement:'分類與資料夾',
+                accountManagement:'賬戶管理',languageManagement:'語言管理',
+                customizeSettings:'自定義設置',exportHtml:'導出HTML',
+                addRoute:'新增路線',addCategory:'新增分類',addFolder:'新增資料夾',
+                addAccount:'新增賬戶',addLanguage:'新增語言',
+                categoryList:'分類列表',folderList:'資料夾列表',
+                saveSettings:'保存設置',siteTitle:'網站標題',
+                loginPageTitle:'登錄頁標題',loginIconUrl:'登錄頁圖標URL',
+                exportDesc:'點擊下方按鈕將導出一個包含所有數據的獨立HTML文件，可以直接在瀏覽器中打開使用。',
+                exportFullHtml:'導出完整HTML文件',routeName:'路線名稱',
+                category:'所屬分類',folder:'所屬資料夾',add:'添加',
+                saveRoute:'保存路線',save:'保存',folderName:'資料夾名稱',
+                parentCategory:'所屬分類',language:'語言',fontSize:'字體大小',
+                colorTheme:'顏色主題',themeBW:'黑白',themeBlue:'藍色',
+                noRoutes:'暫無路線數據',noIntro:'暫無簡介',noBuses:'暫無掛牌車信息',
+                editRoute:'編輯路線',edit:'編輯',delete:'刪除',
+                imgCount:'張圖片',busCount:'輛',enableBusInfo:'添加掛牌車資訊',
+                register:'註冊',loading:'加載中...',registerError:'操作異常，暫時無法註冊',
+                region:'地區',updateDate:'更新日期',copyrightText:'版權提示',
+                guestLogin:'訪客進入',loginToViewBuses:'請登錄後再查看',
+                multiLangTitles:'多語言標題設置'
+            },
+            'en': {
+                login:'Login',logout:'Logout',settings:'Settings',search:'Search',categories:'Categories',
+                allCategories:'All Categories',allFolders:'All Folders',searchRoute:'Search Route',
+                enterSecret:'Enter Code',confirm:'Confirm',routeIntro:'Route Introduction',
+                allocatedBuses:'Allocated Buses',busNumber:'ID',busPlate:'Plate',busModel:'Model',busAge:'Age',
+                images:'Images',adminSystem:'Admin System',backToFront:'Back to Front',
+                routeManagement:'Route Management',categoryManagement:'Categories & Folders',
+                accountManagement:'Account Management',languageManagement:'Language Management',
+                customizeSettings:'Customize',exportHtml:'Export HTML',
+                addRoute:'Add Route',addCategory:'Add Category',addFolder:'Add Folder',
+                addAccount:'Add Account',addLanguage:'Add Language',
+                categoryList:'Category List',folderList:'Folder List',
+                saveSettings:'Save Settings',siteTitle:'Site Title',
+                loginPageTitle:'Login Title',loginIconUrl:'Login Icon URL',
+                exportDesc:'Click below to export a standalone HTML file containing all data.',
+                exportFullHtml:'Export HTML',routeName:'Route Name',
+                category:'Category',folder:'Folder',add:'Add',
+                saveRoute:'Save Route',save:'Save',folderName:'Folder Name',
+                parentCategory:'Parent Category',language:'Language',fontSize:'Font Size',
+                colorTheme:'Color Theme',themeBW:'B&W',themeBlue:'Blue',
+                noRoutes:'No routes',noIntro:'No introduction',noBuses:'No bus info',
+                editRoute:'Edit Route',edit:'Edit',delete:'Delete',
+                imgCount:' images',busCount:' buses',enableBusInfo:'Add Bus Information',
+                register:'Register',loading:'Loading...',registerError:'Operation failed, registration unavailable',
+                region:'Region',updateDate:'Update Date',copyrightText:'Copyright',
+                guestLogin:'Guest Entry',loginToViewBuses:'Please login to view',
+                multiLangTitles:'Multi-language Titles'
+            }
+        };
+
+        function T(key) {
+            var dict = translations[appData.currentLanguage] || translations['zh-CN'];
+            return dict[key] || key;
+        }
+
+        // ========== 全局顶部提示系统 ==========
+        function showToast(message, type, duration) {
+            type = type || 'info';
+            duration = duration || 4000;
+            var container = document.getElementById('toastContainer');
+            var toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(function() {
+                toast.classList.add('toast-hide');
+                setTimeout(function() {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
+            }, duration);
+        }
+
+        // ========== 数据 ==========
+        var appData = {
+            accounts: [{ id: 1, username: 'Admin', password: 'Carter0502', status: 'approved' }],
+            routes: [], categories: [{ id: 1, name: '全部路线' }], folders: [],
+            languages: [{ id: 1, code: 'zh-CN', name: '简体中文' }, { id: 2, code: 'zh-TW', name: '繁體中文' }, { id: 3, code: 'en', name: 'English' }],
+            customization: { title: '巴士路线图详细资料', loginTitle: '巴士路线图资讯', loginIcon: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png', updateDate: '', copyright: '© 2024 巴士路线图资讯 版权所有' },
+            currentLanguage: 'zh-CN', fontSize: 16, theme: 'bw', region: 'CN'
+        };
+
+        var tempImages = [], tempBuses = [];
+        var currentUser = null, selectedCategory = null, selectedFolder = null, securityCheckInterval = null;
+
+        // ========== 主题 ==========
+        function applyTheme(theme) {
+            appData.theme = theme;
+            document.documentElement.setAttribute('data-theme', theme);
+            document.querySelectorAll('.theme-preview').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-theme-val') === theme);
+            });
+            saveData();
+        }
+
+        // ========== 安全检查 0.1秒 ==========
+        function startSecurityCheck() {
+            if (securityCheckInterval) clearInterval(securityCheckInterval);
+            securityCheckInterval = setInterval(checkLoginStatus, 100);
+        }
+        function checkLoginStatus() {
+            var isAdminVisible = !document.getElementById('adminPage').classList.contains('hidden');
+            var isMainVisible = !document.getElementById('mainPage').classList.contains('hidden');
+            if (!currentUser && isAdminVisible) { forceLogout('检测到未授权访问后台系统，您已被强制退出'); return; }
+            if (!currentUser && isMainVisible) { forceLogout('登录状态已失效，请重新登录'); return; }
+            if (currentUser) {
+                // 访客用户跳过账户检查
+                if (currentUser.isGuest) {
+                    // 访客不能进入后台
+                    if (isAdminVisible) { forceLogout('访客无法访问后台系统'); return; }
+                    return;
+                }
+                var acc = appData.accounts.find(function(a) { return a.id === currentUser.id; });
+                if (!acc) { forceLogout('您的账户已被删除'); return; }
+                if (acc.status === 'banned') { forceLogout('您的账户已被封禁'); return; }
+                if (acc.status === 'violation') { forceLogout('您的账户存在安全异常'); return; }
+            }
+        }
+        function forceLogout(msg) {
+            currentUser = null;
+            document.getElementById('adminPage').classList.add('hidden');
+            document.getElementById('mainPage').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.querySelectorAll('.modal-overlay').forEach(function(m) { m.classList.remove('active'); });
+            showToast(msg, 'error', 5000);
+        }
+
+        // ========== 初始化 ==========
+        function init() {
+            var saved = localStorage.getItem('busRouteData');
+            if (saved) { try { appData = JSON.parse(saved); } catch(e) {} }
+            if (!appData.theme) appData.theme = 'bw';
+            document.documentElement.setAttribute('data-theme', appData.theme);
+            applyCustomization();
+            updateInterfaceText();
+            document.documentElement.style.setProperty('--font-size', appData.fontSize + 'px');
+            loadLoginLanguageSelect();
+            bindEvents();
+        }
+        function loadLoginLanguageSelect() {
+            var select = document.getElementById('loginLanguageSelect');
+            select.innerHTML = appData.languages.map(function(lang) {
+                return '<option value="' + lang.code + '">' + lang.name + '</option>';
+            }).join('');
+            select.value = appData.currentLanguage;
+        }
+        function saveData() { localStorage.setItem('busRouteData', JSON.stringify(appData)); }
+
+        function applyCustomization() {
+            var currentLang = appData.currentLanguage;
+            var langTitles = appData.customization.langTitles && appData.customization.langTitles[currentLang];
+            // 使用当前语言的标题，如果没有则使用默认标题
+            var siteTitle = (langTitles && langTitles.title) ? langTitles.title : appData.customization.title;
+            var loginTitle = (langTitles && langTitles.loginTitle) ? langTitles.loginTitle : appData.customization.loginTitle;
+            document.getElementById('mainTitle').textContent = siteTitle;
+            document.getElementById('loginTitle').textContent = loginTitle;
+            document.getElementById('loginIcon').src = appData.customization.loginIcon;
+            document.title = siteTitle;
+            // 更新版权信息
+            var copyright = appData.customization.copyright || '';
+            document.getElementById('loginCopyright').textContent = copyright;
+            document.getElementById('mainCopyright').textContent = copyright;
+            document.getElementById('adminCopyright').textContent = copyright;
+            document.getElementById('settingsCopyright').textContent = copyright;
+        }
+
+        function updateInterfaceText() {
+            var lang = appData.currentLanguage;
+            var dict = translations[lang];
+            // 如果当前语言没有翻译，使用简体中文
+            if (!dict) {
+                dict = translations['zh-CN'];
+            }
+            console.log('更新界面文字，语言:', lang);
+            document.querySelectorAll('[data-i18n]').forEach(function(el) {
+                var key = el.getAttribute('data-i18n');
+                var text = dict[key];
+                if (text) {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        el.placeholder = text;
+                    } else {
+                        el.textContent = text;
+                    }
+                }
+            });
+            // 重新应用自定义标题（不被翻译覆盖）
+            applyCustomization();
+        }
+
+        // ========== 绑定所有事件 ==========
+        function bindEvents() {
+            document.getElementById('btnLogin').addEventListener('click', login);
+            document.getElementById('password').addEventListener('keydown', function(e) { if (e.key === 'Enter') login(); });
+            document.getElementById('btnRegister').addEventListener('click', handleRegister);
+            document.getElementById('btnGuest').addEventListener('click', guestLogin);
+            document.getElementById('btnTogglePassword').addEventListener('click', togglePasswordVisibility);
+            document.getElementById('loginLanguageSelect').addEventListener('change', changeLoginLanguage);
+            document.getElementById('btnDesktopSettings').addEventListener('click', openSettings);
+            document.getElementById('btnDesktopSearch').addEventListener('click', openSearch);
+            document.getElementById('btnDesktopLogout').addEventListener('click', logout);
+            document.getElementById('btnMobileCategory').addEventListener('click', openMobileCategory);
+            document.getElementById('btnMobileSearch').addEventListener('click', openSearch);
+            document.getElementById('btnMobileSettings').addEventListener('click', openSettings);
+            document.getElementById('btnMobileLogout').addEventListener('click', logout);
+            document.getElementById('btnCloseSettings').addEventListener('click', closeSettings);
+            document.getElementById('languageSelect').addEventListener('change', changeLanguage);
+            document.getElementById('fontSizeSlider').addEventListener('input', changeFontSize);
+            document.getElementById('regionSelect').addEventListener('change', changeRegion);
+            document.getElementById('btnCloseSearch').addEventListener('click', closeSearch);
+            document.getElementById('searchInput').addEventListener('input', handleSearch);
+            document.getElementById('btnVerifySecret').addEventListener('click', verifySecret);
+            document.getElementById('secretCode').addEventListener('keydown', function(e) { if (e.key === 'Enter') verifySecret(); });
+            document.getElementById('btnCloseRouteDetail').addEventListener('click', closeRouteDetail);
+            document.getElementById('btnExitAdmin').addEventListener('click', exitAdmin);
+            document.getElementById('btnOpenAddRoute').addEventListener('click', openAddRoute);
+            document.getElementById('btnOpenAddCategory').addEventListener('click', openAddCategory);
+            document.getElementById('btnOpenAddFolder').addEventListener('click', openAddFolder);
+            document.getElementById('btnOpenAddAccount').addEventListener('click', openAddAccount);
+            document.getElementById('btnOpenAddLanguage').addEventListener('click', openAddLanguage);
+            document.getElementById('btnCloseAddRoute').addEventListener('click', closeAddRoute);
+            document.getElementById('routeCategory').addEventListener('change', function() { updateRouteModalFolderSelect(); });
+            document.getElementById('enableBusInfo').addEventListener('change', toggleBusInputSection);
+            document.getElementById('btnAddBus').addEventListener('click', addBus);
+            document.getElementById('btnAddImage').addEventListener('click', addImageUrl);
+            document.getElementById('imageUrlInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addImageUrl(); } });
+            document.getElementById('btnSaveRoute').addEventListener('click', saveRoute);
+            document.getElementById('btnCloseAddCategory').addEventListener('click', closeAddCategory);
+            document.getElementById('btnSaveCategory').addEventListener('click', saveCategory);
+            document.getElementById('btnCloseAddFolder').addEventListener('click', closeAddFolder);
+            document.getElementById('btnSaveFolder').addEventListener('click', saveFolder);
+            document.getElementById('btnCloseAddAccount').addEventListener('click', closeAddAccount);
+            document.getElementById('btnSaveAccount').addEventListener('click', saveAccount);
+            document.getElementById('btnCloseAddLanguage').addEventListener('click', closeAddLanguage);
+            document.getElementById('btnSaveLanguage').addEventListener('click', saveLanguage);
+            document.getElementById('customLoginIcon').addEventListener('input', previewLoginIcon);
+            document.getElementById('btnSaveCustomization').addEventListener('click', saveCustomization);
+            document.getElementById('btnExportHTML').addEventListener('click', exportHTML);
+            document.getElementById('mobileCategoryFilter').addEventListener('change', handleFilterChange);
+            document.getElementById('mobileFolderFilter').addEventListener('change', handleFilterChange);
+            document.getElementById('desktopFolderFilter').addEventListener('change', handleFilterChange);
+
+            // 主题选择
+            document.querySelectorAll('.theme-preview').forEach(function(el) {
+                el.addEventListener('click', function() { applyTheme(this.getAttribute('data-theme-val')); });
+            });
+            document.getElementById('themeBW').addEventListener('click', function() { applyTheme('bw'); });
+            document.getElementById('themeBlue').addEventListener('click', function() { applyTheme('blue'); });
+
+            // 后台侧边栏
+            document.querySelectorAll('.admin-sidebar-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() { showAdminTab(this.getAttribute('data-tab')); });
+            });
+        }
+
+        // ========== 登录页语言切换 ==========
+        function changeLoginLanguage() {
+            var newLang = document.getElementById('loginLanguageSelect').value;
+            appData.currentLanguage = newLang;
+            saveData();
+            updateInterfaceText();
+            loadLoginLanguageSelect();
+        }
+
+        // ========== 密码显示/隐藏 ==========
+        function togglePasswordVisibility() {
+            var pwdInput = document.getElementById('password');
+            var iconEye = document.getElementById('iconEye');
+            var iconEyeOff = document.getElementById('iconEyeOff');
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                iconEye.classList.remove('hidden');
+                iconEyeOff.classList.add('hidden');
+            } else {
+                pwdInput.type = 'password';
+                iconEye.classList.add('hidden');
+                iconEyeOff.classList.remove('hidden');
+            }
+        }
+
+        // ========== 访客登录 ==========
+        function guestLogin() {
+            currentUser = { id: 0, username: 'Guest', isGuest: true };
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainPage').classList.remove('hidden');
+            loadMainPage();
+        }
+
+        // ========== 注册 ==========
+        function handleRegister() {
+            // 先显示加载中提示
+            showToast(T('loading'), 'info', 2500);
+            // 3秒后显示错误提示
+            setTimeout(function() {
+                showToast(T('registerError'), 'error', 5000);
+            }, 3000);
+        }
+
+        // ========== 登录 ==========
+        function login() {
+            var username = document.getElementById('username').value;
+            var password = document.getElementById('password').value;
+            var account = appData.accounts.find(function(a) { return a.username === username && a.password === password; });
+            if (!account) { showToast('用户名或密码错误', 'error', 4000); return; }
+            if (account.status === 'violation') { showToast('该账户存在异常，登录失败', 'error', 5000); return; }
+            if (account.status === 'banned') { showToast('该账号已被封禁', 'error', 5000); return; }
+            if (account.status === 'pending') { showToast('该账户存在风险，请减少异常操作', 'warning', 4000); }
+            currentUser = account;
+            setTimeout(function() {
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('mainPage').classList.remove('hidden');
+                loadMainPage();
+            }, account.status === 'pending' ? 2000 : 0);
+        }
+        function logout() {
+            currentUser = null;
+            document.getElementById('mainPage').classList.add('hidden');
+            document.getElementById('adminPage').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('username').value = ''; document.getElementById('password').value = '';
+        }
+
+        // ========== 主页面 ==========
+        function loadMainPage() {
+            selectedCategory = null; selectedFolder = null;
+            loadCategories(); loadFilters(); loadRoutes(); loadLanguageSelect();
+        }
+        function loadCategories() {
+            var list = document.getElementById('categoryList');
+            var html = '<div class="sidebar-item p-2 rounded cursor-pointer ' + (selectedCategory === null ? 'active' : '') + '" data-catid="null">' + T('allCategories') + '</div>';
+            appData.categories.forEach(function(cat) {
+                if (cat.name !== '全部路线') {
+                    html += '<div class="sidebar-item p-2 rounded cursor-pointer ' + (selectedCategory === cat.id ? 'active' : '') + '" data-catid="' + cat.id + '">' + cat.name + '</div>';
+                }
+            });
+            list.innerHTML = html;
+            list.querySelectorAll('.sidebar-item').forEach(function(item) {
+                item.addEventListener('click', function() {
+                    var catId = this.getAttribute('data-catid');
+                    setFilterCategory(catId === 'null' ? null : parseInt(catId));
+                });
+            });
+        }
+        function loadFilters() {
+            var mobileCatSelect = document.getElementById('mobileCategoryFilter');
+            var catHtml = '<option value="">' + T('allCategories') + '</option>';
+            appData.categories.forEach(function(cat) {
+                if (cat.name !== '全部路线') catHtml += '<option value="' + cat.id + '">' + cat.name + '</option>';
+            });
+            mobileCatSelect.innerHTML = catHtml;
+            mobileCatSelect.value = selectedCategory || '';
+            updateFolderFilters();
+        }
+        function updateFolderFilters() {
+            var filteredFolders = appData.folders;
+            if (selectedCategory) filteredFolders = appData.folders.filter(function(f) { return f.categoryId === selectedCategory; });
+            var folderHtml = '<option value="">' + T('allFolders') + '</option>';
+            filteredFolders.forEach(function(folder) { folderHtml += '<option value="' + folder.id + '">' + folder.name + '</option>'; });
+            document.getElementById('mobileFolderFilter').innerHTML = folderHtml;
+            document.getElementById('desktopFolderFilter').innerHTML = folderHtml;
+            if (selectedFolder && !filteredFolders.find(function(f) { return f.id === selectedFolder; })) selectedFolder = null;
+            document.getElementById('mobileFolderFilter').value = selectedFolder || '';
+            document.getElementById('desktopFolderFilter').value = selectedFolder || '';
+        }
+        function handleFilterChange() {
+            if (window.innerWidth <= 768) {
+                var newCat = document.getElementById('mobileCategoryFilter').value;
+                newCat = newCat ? parseInt(newCat) : null;
+                if (newCat !== selectedCategory) {
+                    selectedCategory = newCat; selectedFolder = null;
+                    updateFolderFilters(); loadCategories();
+                } else {
+                    var mf = document.getElementById('mobileFolderFilter').value;
+                    selectedFolder = mf ? parseInt(mf) : null;
+                }
+            } else {
+                var df = document.getElementById('desktopFolderFilter').value;
+                selectedFolder = df ? parseInt(df) : null;
+            }
+            loadRoutes();
+        }
+        function setFilterCategory(catId) {
+            selectedCategory = catId; selectedFolder = null;
+            loadCategories();
+            document.getElementById('mobileCategoryFilter').value = selectedCategory || '';
+            updateFolderFilters(); loadRoutes();
+        }
+        function openMobileCategory() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(function() { document.getElementById('mobileCategoryFilter').focus(); }, 300);
+        }
+        function loadRoutes(filter) {
+            var list = document.getElementById('routeList');
+            var routes = appData.routes;
+            if (selectedCategory !== null) routes = routes.filter(function(r) { return r.categoryId === selectedCategory; });
+            if (selectedFolder !== null) routes = routes.filter(function(r) { return r.folderId === selectedFolder; });
+            if (filter) routes = routes.filter(function(r) { return r.name.toLowerCase().indexOf(filter.toLowerCase()) >= 0; });
+            if (routes.length === 0) { list.innerHTML = '<div class="col-span-full text-center text-gray-500 py-12">' + T('noRoutes') + '</div>'; return; }
+            list.innerHTML = routes.map(function(route) {
+                var folderLabel = route.folderId ? '<span class="absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-full" style="background:var(--badge-bg)">' + getFolderName(route.folderId) + '</span>' : '';
+                return '<div class="route-card bg-white rounded-xl shadow-md overflow-hidden cursor-pointer" data-routeid="' + route.id + '">' +
+                    '<div class="relative h-40"><img src="' + (route.images[0] || 'https://via.placeholder.com/400x200?text=No+Image') + '" class="w-full h-full object-cover" onerror="this.src=\'https://via.placeholder.com/400x200?text=No+Image\'">' + folderLabel + '</div>' +
+                    '<div class="p-4"><h3 class="font-bold text-lg">' + route.name + '</h3><p class="text-sm text-gray-500">' + route.images.length + ' ' + T('imgCount') + '</p></div></div>';
+            }).join('');
+            list.querySelectorAll('.route-card').forEach(function(card) {
+                card.addEventListener('click', function() { viewRoute(parseInt(this.getAttribute('data-routeid'))); });
+            });
+        }
+        function getFolderName(id) { var f = appData.folders.find(function(x) { return x.id === id; }); return f ? f.name : ''; }
+        function viewRoute(id) {
+            var route = appData.routes.find(function(r) { return r.id === id; });
+            if (!route) return;
+            document.getElementById('routeDetailTitle').textContent = route.name;
+            document.getElementById('routeDetailIntro').textContent = route.intro || T('noIntro');
+            var busTable = document.getElementById('routeDetailBuses');
+            // 检查是否为访客
+            if (currentUser && currentUser.isGuest) {
+                busTable.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">' + T('loginToViewBuses') + '</td></tr>';
+            } else if (route.buses && route.buses.length > 0) {
+                busTable.innerHTML = route.buses.map(function(bus) {
+                    return '<tr class="border-t"><td class="p-2">' + bus.number + '</td><td class="p-2">' + bus.plate + '</td><td class="p-2">' + bus.model + '</td><td class="p-2">' + bus.age + '</td></tr>';
+                }).join('');
+            } else { busTable.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">暂无数据，数据来源澳门交通资讯网</td></tr>'; }
+            document.getElementById('routeDetailImages').innerHTML = route.images.map(function(img) {
+                return '<img src="' + img + '" class="w-full h-24 md:h-32 object-cover rounded-lg cursor-pointer hover:opacity-80" data-imgurl="' + img + '" onerror="this.src=\'https://via.placeholder.com/200?text=Error\'">';
+            }).join('');
+            document.getElementById('routeDetailImages').querySelectorAll('img').forEach(function(imgEl) {
+                imgEl.addEventListener('click', function() { window.open(this.getAttribute('data-imgurl'), '_blank'); });
+            });
+            document.getElementById('routeDetailModal').classList.add('active');
+        }
+        function closeRouteDetail() { document.getElementById('routeDetailModal').classList.remove('active'); }
+
+        // ========== 设置 ==========
+        function openSettings() {
+            loadLanguageSelect();
+            document.getElementById('fontSizeSlider').value = appData.fontSize;
+            document.getElementById('fontSizeValue').textContent = appData.fontSize;
+            document.getElementById('regionSelect').value = appData.region || 'CN';
+            // 显示更新日期
+            var updateDateDisplay = document.getElementById('updateDateDisplay');
+            var updateDateText = document.getElementById('updateDateText');
+            if (appData.customization.updateDate) {
+                updateDateDisplay.classList.remove('hidden');
+                updateDateText.textContent = appData.customization.updateDate;
+            } else {
+                updateDateDisplay.classList.add('hidden');
+            }
+            document.querySelectorAll('.theme-preview').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-theme-val') === appData.theme);
+            });
+            document.getElementById('settingsModal').classList.add('active');
+        }
+        function changeRegion() {
+            appData.region = document.getElementById('regionSelect').value;
+            saveData();
+        }
+        function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+        function loadLanguageSelect() {
+            var select = document.getElementById('languageSelect');
+            var currentLang = appData.currentLanguage;
+            // 检查当前语言是否存在于语言列表中
+            var langExists = appData.languages.some(function(l) { return l.code === currentLang; });
+            if (!langExists && appData.languages.length > 0) {
+                currentLang = appData.languages[0].code;
+                appData.currentLanguage = currentLang;
+            }
+            select.innerHTML = appData.languages.map(function(lang) {
+                return '<option value="' + lang.code + '">' + lang.name + '</option>';
+            }).join('');
+            // 设置选中值
+            select.value = currentLang;
+            console.log('当前语言:', currentLang, '选择器值:', select.value);
+        }
+        function changeLanguage() {
+            var selectEl = document.getElementById('languageSelect');
+            var newLang = selectEl.value;
+            console.log('切换语言到:', newLang);
+            appData.currentLanguage = newLang;
+            saveData();
+            // 更新界面文字
+            updateInterfaceText();
+            // 重新加载所有动态生成的内容
+            if (!document.getElementById('mainPage').classList.contains('hidden')) {
+                loadCategories(); loadFilters(); loadRoutes();
+            }
+            if (!document.getElementById('adminPage').classList.contains('hidden')) {
+                loadAdminData();
+            }
+            // 不关闭设置弹窗，让用户可以继续调整
+            // 重新加载语言选择框以保持选中状态
+            loadLanguageSelect();
+        }
+        function changeFontSize() {
+            var size = document.getElementById('fontSizeSlider').value;
+            document.getElementById('fontSizeValue').textContent = size;
+            appData.fontSize = parseInt(size);
+            document.documentElement.style.setProperty('--font-size', size + 'px');
+            saveData();
+        }
+
+        // ========== 搜索 ==========
+        function openSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            document.getElementById('searchModal').classList.add('active');
+            setTimeout(function() { document.getElementById('searchInput').focus(); }, 100);
+        }
+        function closeSearch() { document.getElementById('searchModal').classList.remove('active'); }
+        function handleSearch() {
+            var value = document.getElementById('searchInput').value;
+            if (value === 'Carter0502') {
+                // 访客无法进入后台，显示无搜索结果
+                if (currentUser && currentUser.isGuest) {
+                    document.getElementById('searchResults').innerHTML = '<p class="text-gray-500">搜索中...</p>';
+                    setTimeout(function() {
+                        document.getElementById('searchResults').innerHTML = '<p class="text-gray-500">无搜索结果</p>';
+                    }, 2000);
+                    return;
+                }
+                document.getElementById('searchResults').innerHTML = '<p class="text-gray-500">搜索中...</p>';
+                setTimeout(function() {
+                    closeSearch();
+                    document.getElementById('secretModal').classList.add('active');
+                    setTimeout(function() { document.getElementById('secretCode').focus(); }, 100);
+                }, 2000);
+                return;
+            }
+            if (!value.trim()) { document.getElementById('searchResults').innerHTML = ''; return; }
+            var results = appData.routes.filter(function(r) { return r.name.toLowerCase().indexOf(value.toLowerCase()) >= 0; });
+            if (results.length === 0) { document.getElementById('searchResults').innerHTML = '<p class="text-gray-500">无搜索结果</p>'; }
+            else {
+                document.getElementById('searchResults').innerHTML = results.map(function(r) {
+                    return '<div class="p-2 hover:bg-gray-100 rounded cursor-pointer" data-routeid="' + r.id + '">' + r.name + '</div>';
+                }).join('');
+                document.getElementById('searchResults').querySelectorAll('[data-routeid]').forEach(function(el) {
+                    el.addEventListener('click', function() { closeSearch(); viewRoute(parseInt(this.getAttribute('data-routeid'))); });
+                });
+            }
+        }
+        function verifySecret() {
+            if (document.getElementById('secretCode').value === '244446') {
+                document.getElementById('secretModal').classList.remove('active');
+                document.getElementById('mainPage').classList.add('hidden');
+                document.getElementById('adminPage').classList.remove('hidden');
+                loadAdminData();
+                showToast('已进入后台管理系统', 'success', 3000);
+            } else { showToast('验证码错误', 'error', 3000); }
+            document.getElementById('secretCode').value = '';
+        }
+
+        // ========== 后台管理 ==========
+        function exitAdmin() {
+            document.getElementById('adminPage').classList.add('hidden');
+            document.getElementById('mainPage').classList.remove('hidden');
+            loadMainPage();
+        }
+        function showAdminTab(tab) {
+            document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.add('hidden'); });
+            document.querySelectorAll('.admin-sidebar-btn').forEach(function(s) { s.classList.remove('active'); });
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            var tabBtn = document.querySelector('.admin-sidebar-btn[data-tab="' + tab + '"]');
+            if (tabBtn) tabBtn.classList.add('active');
+        }
+        function loadAdminData() {
+            loadAdminRoutes(); loadAdminCategories(); loadAdminFolders();
+            loadAdminAccounts(); loadAdminLanguages(); loadCustomizationForm();
+        }
+        function loadAdminRoutes() {
+            var list = document.getElementById('adminRouteList');
+            if (appData.routes.length === 0) { list.innerHTML = '<div class="p-8 text-center text-gray-500">' + T('noRoutes') + '</div>'; return; }
+            list.innerHTML = '<table class="w-full min-w-[500px]"><thead class="bg-gray-50"><tr>' +
+                '<th class="p-3 text-left">' + T('routeName') + '</th><th class="p-3 text-left">' + T('category') + '</th><th class="p-3 text-left">' + T('folder') + '</th><th class="p-3 text-left">' + T('allocatedBuses') + '</th><th class="p-3 text-left"></th>' +
+                '</tr></thead><tbody>' + appData.routes.map(function(r) {
+                    var cat = appData.categories.find(function(c) { return c.id === r.categoryId; });
+                    var fol = appData.folders.find(function(f) { return f.id === r.folderId; });
+                    return '<tr class="border-t"><td class="p-3">' + r.name + '</td><td class="p-3">' + (cat ? cat.name : '-') + '</td><td class="p-3">' + (fol ? fol.name : '-') + '</td><td class="p-3">' + (r.buses ? r.buses.length : 0) + ' ' + T('busCount') + '</td><td class="p-3">' +
+                        '<button class="text-link mr-2 btn-edit-route" data-id="' + r.id + '">' + T('edit') + '</button>' +
+                        '<button class="text-red-600 hover:underline btn-delete-route" data-id="' + r.id + '">' + T('delete') + '</button></td></tr>';
+                }).join('') + '</tbody></table>';
+            list.querySelectorAll('.btn-edit-route').forEach(function(btn) { btn.addEventListener('click', function() { editRoute(parseInt(this.getAttribute('data-id'))); }); });
+            list.querySelectorAll('.btn-delete-route').forEach(function(btn) { btn.addEventListener('click', function() { deleteRoute(parseInt(this.getAttribute('data-id'))); }); });
+        }
+        function loadAdminCategories() {
+            var el = document.getElementById('adminCategoryList');
+            el.innerHTML = appData.categories.map(function(c) {
+                return '<div class="flex justify-between items-center p-2 bg-gray-50 rounded"><span>' + c.name + '</span><div>' +
+                    '<button class="text-link text-sm btn-edit-cat" data-id="' + c.id + '">' + T('edit') + '</button>' +
+                    '<button class="text-red-600 text-sm ml-2 btn-delete-cat" data-id="' + c.id + '">' + T('delete') + '</button></div></div>';
+            }).join('');
+            el.querySelectorAll('.btn-edit-cat').forEach(function(btn) { btn.addEventListener('click', function() { editCategory(parseInt(this.getAttribute('data-id'))); }); });
+            el.querySelectorAll('.btn-delete-cat').forEach(function(btn) { btn.addEventListener('click', function() { deleteCategory(parseInt(this.getAttribute('data-id'))); }); });
+        }
+        function loadAdminFolders() {
+            var el = document.getElementById('adminFolderList');
+            if (appData.folders.length === 0) { el.innerHTML = '<p class="text-gray-500">-</p>'; return; }
+            el.innerHTML = appData.folders.map(function(f) {
+                var cat = appData.categories.find(function(c) { return c.id === f.categoryId; });
+                return '<div class="flex justify-between items-center p-2 bg-gray-50 rounded"><div><span>' + f.name + '</span><span class="text-xs text-gray-500 ml-2">(' + (cat ? cat.name : '-') + ')</span></div><div>' +
+                    '<button class="text-link text-sm btn-edit-folder" data-id="' + f.id + '">' + T('edit') + '</button>' +
+                    '<button class="text-red-600 text-sm ml-2 btn-delete-folder" data-id="' + f.id + '">' + T('delete') + '</button></div></div>';
+            }).join('');
+            el.querySelectorAll('.btn-edit-folder').forEach(function(btn) { btn.addEventListener('click', function() { editFolder(parseInt(this.getAttribute('data-id'))); }); });
+            el.querySelectorAll('.btn-delete-folder').forEach(function(btn) { btn.addEventListener('click', function() { deleteFolder(parseInt(this.getAttribute('data-id'))); }); });
+        }
+        function loadAdminAccounts() {
+            var statusMap = { approved:'已通过', pending:'需要审核', reviewed:'已审核', violation:'违反安全设置', banned:'封号' };
+            var statusColors = { approved:'#e5e7eb', pending:'#fef9c3', reviewed:'#dbeafe', violation:'#fee2e2', banned:'#f3f4f6' };
+            var textColors = { approved:'#1f2937', pending:'#854d0e', reviewed:'#1e40af', violation:'#991b1b', banned:'#374151' };
+            var el = document.getElementById('adminAccountList');
+            el.innerHTML = '<table class="w-full min-w-[400px]"><thead class="bg-gray-50"><tr>' +
+                '<th class="p-3 text-left">用户名</th><th class="p-3 text-left">状态</th><th class="p-3 text-left"></th>' +
+                '</tr></thead><tbody>' + appData.accounts.map(function(a) {
+                    return '<tr class="border-t"><td class="p-3">' + a.username + '</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs" style="background:' + statusColors[a.status] + ';color:' + textColors[a.status] + '">' + statusMap[a.status] + '</span></td><td class="p-3">' +
+                        '<button class="text-link mr-2 btn-edit-acc" data-id="' + a.id + '">' + T('edit') + '</button>' +
+                        '<button class="text-red-600 hover:underline btn-delete-acc" data-id="' + a.id + '">' + T('delete') + '</button></td></tr>';
+                }).join('') + '</tbody></table>';
+            el.querySelectorAll('.btn-edit-acc').forEach(function(btn) { btn.addEventListener('click', function() { editAccount(parseInt(this.getAttribute('data-id'))); }); });
+            el.querySelectorAll('.btn-delete-acc').forEach(function(btn) { btn.addEventListener('click', function() { deleteAccount(parseInt(this.getAttribute('data-id'))); }); });
+        }
+        function loadAdminLanguages() {
+            var el = document.getElementById('adminLanguageList');
+            el.innerHTML = '<table class="w-full min-w-[400px]"><thead class="bg-gray-50"><tr>' +
+                '<th class="p-3 text-left">代码</th><th class="p-3 text-left">名称</th><th class="p-3 text-left"></th>' +
+                '</tr></thead><tbody>' + appData.languages.map(function(l) {
+                    return '<tr class="border-t"><td class="p-3">' + l.code + '</td><td class="p-3">' + l.name + '</td><td class="p-3">' +
+                        '<button class="text-link mr-2 btn-edit-lang" data-id="' + l.id + '">' + T('edit') + '</button>' +
+                        '<button class="text-red-600 hover:underline btn-delete-lang" data-id="' + l.id + '">' + T('delete') + '</button></td></tr>';
+                }).join('') + '</tbody></table>';
+            el.querySelectorAll('.btn-edit-lang').forEach(function(btn) { btn.addEventListener('click', function() { editLanguage(parseInt(this.getAttribute('data-id'))); }); });
+            el.querySelectorAll('.btn-delete-lang').forEach(function(btn) { btn.addEventListener('click', function() { deleteLanguage(parseInt(this.getAttribute('data-id'))); }); });
+        }
+        function loadCustomizationForm() {
+            document.getElementById('customTitle').value = appData.customization.title;
+            document.getElementById('customLoginTitle').value = appData.customization.loginTitle;
+            document.getElementById('customLoginIcon').value = appData.customization.loginIcon;
+            document.getElementById('customUpdateDate').value = appData.customization.updateDate || '';
+            document.getElementById('customCopyright').value = appData.customization.copyright || '';
+            // 加载多语言标题
+            loadMultiLangTitles();
+        }
+        function loadMultiLangTitles() {
+            var container = document.getElementById('multiLangTitlesList');
+            if (!appData.customization.langTitles) appData.customization.langTitles = {};
+            container.innerHTML = appData.languages.map(function(lang) {
+                var langTitle = appData.customization.langTitles[lang.code] || {};
+                return '<div class="bg-gray-50 p-3 rounded-lg">' +
+                    '<p class="font-medium text-gray-700 mb-2">' + lang.name + ' (' + lang.code + ')</p>' +
+                    '<div class="space-y-2">' +
+                    '<input type="text" class="w-full p-2 border rounded lang-title-input" data-lang="' + lang.code + '" data-field="title" placeholder="网站标题" value="' + (langTitle.title || '') + '">' +
+                    '<input type="text" class="w-full p-2 border rounded lang-login-title-input" data-lang="' + lang.code + '" data-field="loginTitle" placeholder="登录页标题" value="' + (langTitle.loginTitle || '') + '">' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        // ========== 路线操作 ==========
+        function openAddRoute() {
+            document.getElementById('routeModalTitle').textContent = T('addRoute');
+            document.getElementById('editRouteId').value = '';
+            document.getElementById('routeName').value = '';
+            document.getElementById('routeIntro').value = '';
+            document.getElementById('busNumber').value = ''; document.getElementById('busPlate').value = '';
+            document.getElementById('busModel').value = ''; document.getElementById('busAge').value = '';
+            document.getElementById('imageUrlInput').value = '';
+            document.getElementById('enableBusInfo').checked = false;
+            document.getElementById('busInputSection').classList.add('hidden');
+            tempImages = []; tempBuses = [];
+            updateImagePreview(); updateBusPreview(); loadRouteCategorySelect();
+            document.getElementById('addRouteModal').classList.add('active');
+        }
+        function loadRouteCategorySelect(selectedCat, selectedFol) {
+            document.getElementById('routeCategory').innerHTML = '<option value="">--</option>' + appData.categories.map(function(c) {
+                return '<option value="' + c.id + '"' + (c.id === selectedCat ? ' selected' : '') + '>' + c.name + '</option>';
+            }).join('');
+            updateRouteModalFolderSelect(selectedFol);
+        }
+        function updateRouteModalFolderSelect(selectedFol) {
+            var catId = parseInt(document.getElementById('routeCategory').value);
+            var folders = appData.folders;
+            if (catId) folders = folders.filter(function(f) { return f.categoryId === catId; });
+            document.getElementById('routeFolder').innerHTML = '<option value="">--</option>' + folders.map(function(f) {
+                return '<option value="' + f.id + '"' + (f.id === selectedFol ? ' selected' : '') + '>' + f.name + '</option>';
+            }).join('');
+        }
+        function closeAddRoute() { document.getElementById('addRouteModal').classList.remove('active'); }
+        function toggleBusInputSection() {
+            var checkbox = document.getElementById('enableBusInfo');
+            var section = document.getElementById('busInputSection');
+            if (checkbox.checked) {
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+                // 清空挂牌车数据
+                tempBuses = [];
+                updateBusPreview();
+            }
+        }
+        function addImageUrl() {
+            var input = document.getElementById('imageUrlInput');
+            var url = input.value.trim();
+            if (!url) return;
+            if (tempImages.length >= 25) { showToast('最多只能添加25张图片', 'warning', 3000); return; }
+            tempImages.push(url); input.value = ''; input.focus(); updateImagePreview();
+        }
+        function updateImagePreview() {
+            document.getElementById('imageCount').textContent = '已添加: ' + tempImages.length + '/25';
+            var el = document.getElementById('imagePreviewList');
+            el.innerHTML = tempImages.map(function(img, i) {
+                return '<div class="relative group"><img src="' + img + '" class="w-full h-16 md:h-20 object-cover rounded" onerror="this.src=\'https://via.placeholder.com/100?text=Error\'">' +
+                    '<button class="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 rounded-full text-xs btn-remove-img" data-idx="' + i + '">&times;</button></div>';
+            }).join('');
+            el.querySelectorAll('.btn-remove-img').forEach(function(btn) {
+                btn.addEventListener('click', function(e) { e.preventDefault(); tempImages.splice(parseInt(this.getAttribute('data-idx')), 1); updateImagePreview(); });
+            });
+        }
+        function addBus() {
+            var number = document.getElementById('busNumber').value.trim();
+            var plate = document.getElementById('busPlate').value.trim();
+            var model = document.getElementById('busModel').value.trim();
+            var age = document.getElementById('busAge').value.trim();
+            if (!number && !plate) { showToast('请至少输入编号或车牌', 'warning', 3000); return; }
+            tempBuses.push({ number:number, plate:plate, model:model, age:age });
+            document.getElementById('busNumber').value = ''; document.getElementById('busPlate').value = '';
+            document.getElementById('busModel').value = ''; document.getElementById('busAge').value = '';
+            document.getElementById('busNumber').focus(); updateBusPreview();
+        }
+        function updateBusPreview() {
+            var el = document.getElementById('busPreviewList');
+            if (tempBuses.length === 0) { el.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-2">' + T('noBuses') + '</td></tr>'; return; }
+            el.innerHTML = tempBuses.map(function(bus, i) {
+                return '<tr class="border-t"><td class="p-1">' + bus.number + '</td><td class="p-1">' + bus.plate + '</td><td class="p-1">' + bus.model + '</td><td class="p-1">' + bus.age + '</td>' +
+                    '<td class="p-1 text-right"><button class="text-red-500 hover:text-red-700 btn-remove-bus" data-idx="' + i + '">&times;</button></td></tr>';
+            }).join('');
+            el.querySelectorAll('.btn-remove-bus').forEach(function(btn) {
+                btn.addEventListener('click', function(e) { e.preventDefault(); tempBuses.splice(parseInt(this.getAttribute('data-idx')), 1); updateBusPreview(); });
+            });
+        }
+        function saveRoute() {
+            var name = document.getElementById('routeName').value.trim();
+            var intro = document.getElementById('routeIntro').value.trim();
+            if (!name) { alert('请输入路线名称'); return; }
+            var editId = document.getElementById('editRouteId').value;
+            var categoryId = document.getElementById('routeCategory').value ? parseInt(document.getElementById('routeCategory').value) : null;
+            var folderId = document.getElementById('routeFolder').value ? parseInt(document.getElementById('routeFolder').value) : null;
+            if (editId) {
+                var route = appData.routes.find(function(r) { return r.id === parseInt(editId); });
+                route.name = name; route.intro = intro; route.images = tempImages; route.buses = tempBuses;
+                route.categoryId = categoryId; route.folderId = folderId;
+            } else {
+                appData.routes.push({ id: Date.now(), name:name, intro:intro, images:tempImages, buses:tempBuses, categoryId:categoryId, folderId:folderId });
+            }
+            saveData(); closeAddRoute(); loadAdminRoutes();
+        }
+        function editRoute(id) {
+            var route = appData.routes.find(function(r) { return r.id === id; });
+            document.getElementById('routeModalTitle').textContent = T('editRoute');
+            document.getElementById('editRouteId').value = id;
+            document.getElementById('routeName').value = route.name;
+            document.getElementById('routeIntro').value = route.intro || '';
+            tempImages = (route.images || []).slice();
+            tempBuses = (route.buses || []).map(function(b) { return {number:b.number,plate:b.plate,model:b.model,age:b.age}; });
+            // 如果有挂牌车数据，自动勾选并显示
+            var hasBuses = tempBuses.length > 0;
+            document.getElementById('enableBusInfo').checked = hasBuses;
+            if (hasBuses) {
+                document.getElementById('busInputSection').classList.remove('hidden');
+            } else {
+                document.getElementById('busInputSection').classList.add('hidden');
+            }
+            loadRouteCategorySelect(route.categoryId, route.folderId);
+            updateImagePreview(); updateBusPreview();
+            document.getElementById('addRouteModal').classList.add('active');
+        }
+        function deleteRoute(id) {
+            if (confirm('确定删除此路线?')) {
+                appData.routes = appData.routes.filter(function(r) { return r.id !== id; });
+                saveData(); loadAdminRoutes();
+            }
+        }
+
+        // ========== 分类操作 ==========
+        function openAddCategory() { document.getElementById('editCategoryId').value = ''; document.getElementById('categoryName').value = ''; document.getElementById('addCategoryModal').classList.add('active'); }
+        function closeAddCategory() { document.getElementById('addCategoryModal').classList.remove('active'); }
+        function saveCategory() {
+            var name = document.getElementById('categoryName').value.trim();
+            if (!name) { alert('请输入分类名称'); return; }
+            var editId = document.getElementById('editCategoryId').value;
+            if (editId) { var cat = appData.categories.find(function(c) { return c.id === parseInt(editId); }); cat.name = name; }
+            else { appData.categories.push({ id: Date.now(), name: name }); }
+            saveData(); closeAddCategory(); loadAdminCategories();
+        }
+        function editCategory(id) {
+            var cat = appData.categories.find(function(c) { return c.id === id; });
+            document.getElementById('editCategoryId').value = id; document.getElementById('categoryName').value = cat.name;
+            document.getElementById('addCategoryModal').classList.add('active');
+        }
+        function deleteCategory(id) {
+            if (confirm('确定删除此分类?')) {
+                appData.categories = appData.categories.filter(function(c) { return c.id !== id; });
+                appData.folders.forEach(function(f) { if (f.categoryId === id) f.categoryId = null; });
+                appData.routes.forEach(function(r) { if (r.categoryId === id) r.categoryId = null; });
+                saveData(); loadAdminCategories();
+            }
+        }
+
+        // ========== 资料夹操作 ==========
+        function openAddFolder() {
+            document.getElementById('editFolderId').value = ''; document.getElementById('folderName').value = '';
+            loadFolderCategorySelect(); document.getElementById('addFolderModal').classList.add('active');
+        }
+        function loadFolderCategorySelect(selectedId) {
+            document.getElementById('folderCategory').innerHTML = '<option value="">--</option>' + appData.categories.map(function(c) {
+                return '<option value="' + c.id + '"' + (c.id === selectedId ? ' selected' : '') + '>' + c.name + '</option>';
+            }).join('');
+        }
+        function closeAddFolder() { document.getElementById('addFolderModal').classList.remove('active'); }
+        function saveFolder() {
+            var name = document.getElementById('folderName').value.trim();
+            var catId = document.getElementById('folderCategory').value;
+            if (!name) { alert('请输入资料夹名称'); return; }
+            var editId = document.getElementById('editFolderId').value;
+            var categoryId = catId ? parseInt(catId) : null;
+            if (editId) { var folder = appData.folders.find(function(f) { return f.id === parseInt(editId); }); folder.name = name; folder.categoryId = categoryId; }
+            else { appData.folders.push({ id: Date.now(), name: name, categoryId: categoryId }); }
+            saveData(); closeAddFolder(); loadAdminFolders();
+        }
+        function editFolder(id) {
+            var folder = appData.folders.find(function(f) { return f.id === id; });
+            document.getElementById('editFolderId').value = id; document.getElementById('folderName').value = folder.name;
+            loadFolderCategorySelect(folder.categoryId); document.getElementById('addFolderModal').classList.add('active');
+        }
+        function deleteFolder(id) {
+            if (confirm('确定删除此资料夹?')) {
+                appData.folders = appData.folders.filter(function(f) { return f.id !== id; });
+                appData.routes.forEach(function(r) { if (r.folderId === id) r.folderId = null; });
+                saveData(); loadAdminFolders();
+            }
+        }
+
+        // ========== 账户操作 ==========
+        function openAddAccount() {
+            document.getElementById('accountModalTitle').textContent = T('addAccount');
+            document.getElementById('editAccountId').value = ''; document.getElementById('accountUsername').value = '';
+            document.getElementById('accountPassword').value = ''; document.getElementById('accountStatus').value = 'approved';
+            document.getElementById('addAccountModal').classList.add('active');
+        }
+        function closeAddAccount() { document.getElementById('addAccountModal').classList.remove('active'); }
+        function saveAccount() {
+            var username = document.getElementById('accountUsername').value.trim();
+            var password = document.getElementById('accountPassword').value;
+            var status = document.getElementById('accountStatus').value;
+            if (!username) { alert('请输入用户名'); return; }
+            var editId = document.getElementById('editAccountId').value;
+            if (editId) { var acc = appData.accounts.find(function(a) { return a.id === parseInt(editId); }); acc.username = username; if (password) acc.password = password; acc.status = status; }
+            else { if (!password) { alert('请输入密码'); return; } appData.accounts.push({ id: Date.now(), username:username, password:password, status:status }); }
+            saveData(); closeAddAccount(); loadAdminAccounts();
+        }
+        function editAccount(id) {
+            var acc = appData.accounts.find(function(a) { return a.id === id; });
+            document.getElementById('accountModalTitle').textContent = T('edit');
+            document.getElementById('editAccountId').value = id; document.getElementById('accountUsername').value = acc.username;
+            document.getElementById('accountPassword').value = ''; document.getElementById('accountStatus').value = acc.status;
+            document.getElementById('addAccountModal').classList.add('active');
+        }
+        function deleteAccount(id) {
+            if (appData.accounts.length <= 1) { alert('至少保留一个账户'); return; }
+            if (confirm('确定删除此账户?')) { appData.accounts = appData.accounts.filter(function(a) { return a.id !== id; }); saveData(); loadAdminAccounts(); }
+        }
+
+        // ========== 语言操作 ==========
+        function openAddLanguage() {
+            document.getElementById('editLanguageId').value = ''; document.getElementById('languageCode').value = '';
+            document.getElementById('languageNameInput').value = ''; document.getElementById('addLanguageModal').classList.add('active');
+        }
+        function closeAddLanguage() { document.getElementById('addLanguageModal').classList.remove('active'); }
+        function saveLanguage() {
+            var code = document.getElementById('languageCode').value.trim();
+            var name = document.getElementById('languageNameInput').value.trim();
+            if (!code || !name) { alert('请填写完整信息'); return; }
+            var editId = document.getElementById('editLanguageId').value;
+            if (editId) { var lang = appData.languages.find(function(l) { return l.id === parseInt(editId); }); lang.code = code; lang.name = name; }
+            else { appData.languages.push({ id: Date.now(), code: code, name: name }); }
+            saveData(); closeAddLanguage(); loadAdminLanguages(); loadLanguageSelect();
+        }
+        function editLanguage(id) {
+            var lang = appData.languages.find(function(l) { return l.id === id; });
+            document.getElementById('editLanguageId').value = id; document.getElementById('languageCode').value = lang.code;
+            document.getElementById('languageNameInput').value = lang.name; document.getElementById('addLanguageModal').classList.add('active');
+        }
+        function deleteLanguage(id) {
+            if (appData.languages.length <= 1) { alert('至少保留一种语言'); return; }
+            if (confirm('确定删除此语言?')) { appData.languages = appData.languages.filter(function(l) { return l.id !== id; }); saveData(); loadAdminLanguages(); }
+        }
+
+        // ========== 自定义设置 ==========
+        function previewLoginIcon() {
+            var url = document.getElementById('customLoginIcon').value;
+            var preview = document.getElementById('loginIconPreview');
+            if (url) { preview.src = url; preview.classList.remove('hidden'); } else { preview.classList.add('hidden'); }
+        }
+        function saveCustomization() {
+            appData.customization.title = document.getElementById('customTitle').value;
+            appData.customization.loginTitle = document.getElementById('customLoginTitle').value;
+            appData.customization.loginIcon = document.getElementById('customLoginIcon').value;
+            appData.customization.updateDate = document.getElementById('customUpdateDate').value;
+            appData.customization.copyright = document.getElementById('customCopyright').value;
+            // 保存多语言标题
+            if (!appData.customization.langTitles) appData.customization.langTitles = {};
+            document.querySelectorAll('.lang-title-input').forEach(function(input) {
+                var lang = input.getAttribute('data-lang');
+                if (!appData.customization.langTitles[lang]) appData.customization.langTitles[lang] = {};
+                appData.customization.langTitles[lang].title = input.value;
+            });
+            document.querySelectorAll('.lang-login-title-input').forEach(function(input) {
+                var lang = input.getAttribute('data-lang');
+                if (!appData.customization.langTitles[lang]) appData.customization.langTitles[lang] = {};
+                appData.customization.langTitles[lang].loginTitle = input.value;
+            });
+            saveData(); applyCustomization(); showToast('设置已保存', 'success', 3000);
+        }
+
+        // ========== 导出HTML ==========
+        function exportHTML() {
+            var dataStr = JSON.stringify(appData);
+            // 获取当前页面的完整HTML
+            var htmlContent = document.documentElement.outerHTML;
+            
+            // 创建嵌入数据的脚本
+            var embeddedDataScript = '<script>var EMBEDDED_DATA = ' + dataStr + ';<\/script>';
+            
+            // 在<head>标签后插入嵌入数据脚本
+            htmlContent = htmlContent.replace('<head>', '<head>\n    ' + embeddedDataScript);
+            
+            // 修改init函数中的数据加载逻辑
+            // 查找并替换数据加载部分
+            htmlContent = htmlContent.replace(
+                "var saved = localStorage.getItem('busRouteData');",
+                "var saved = (typeof EMBEDDED_DATA !== 'undefined') ? JSON.stringify(EMBEDDED_DATA) : localStorage.getItem('busRouteData');"
+            );
+            
+            var blob = new Blob(['<!DOCTYPE html>\n' + htmlContent], { type: 'text/html' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a'); a.href = url; a.download = 'bus_routes_export.html'; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ========== 启动 ==========
+        init();
+        startSecurityCheck();
+    </script>
+</body>
+</html>
